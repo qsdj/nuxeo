@@ -33,6 +33,8 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.activation.MimeType;
+import javax.activation.MimeTypeParseException;
 import javax.ws.rs.core.MediaType;
 
 import org.apache.commons.io.FilenameUtils;
@@ -68,6 +70,7 @@ import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.model.ComponentContext;
 import org.nuxeo.runtime.model.ComponentInstance;
 import org.nuxeo.runtime.model.DefaultComponent;
+import org.nuxeo.runtime.services.config.ConfigurationService;
 
 /**
  * Runtime Component that also provides the POJO implementation of the {@link ConversionService}.
@@ -79,6 +82,16 @@ public class ConversionServiceImpl extends DefaultComponent implements Conversio
     public static final String CONVERTER_EP = "converter";
 
     public static final String CONFIG_EP = "configuration";
+
+    /**
+     * @since 10.3
+     */
+    public static final String ENFORCE_SOURCE_MIME_TYPE_CHECK = "nuxeo.convert.enforceSourceMimeTypeCheck";
+
+    /**
+     * @since 10.3
+     */
+    public static final String ANY_MIME_TYPE = "*";
 
     protected final Map<String, ConverterDescriptor> converterDescriptors = new HashMap<>();
 
@@ -310,6 +323,13 @@ public class ConversionServiceImpl extends DefaultComponent implements Conversio
             throw new ConversionException("Converter " + converterName + " can not be found");
         }
 
+        // make sure the converter can handle the blob mime type
+        String mimeType = blobHolder.getBlob().getMimeType();
+        if (!hasSourceMimeType(desc, mimeType)) {
+            throw new ConversionException(
+                    String.format("%s mime type not supported by %s converter", mimeType, desc.getConverterName()));
+        }
+
         String cacheKey = CacheKeyGenerator.computeKey(converterName, blobHolder, parameters);
 
         BlobHolder result = ConversionCacheHolder.getFromCache(cacheKey);
@@ -332,6 +352,52 @@ public class ConversionServiceImpl extends DefaultComponent implements Conversio
         }
 
         return result;
+    }
+
+    /**
+     * Returns true if the converter has the given {@code mimeType} as source mime type, false otherwise.
+     *
+     * @since 10.3
+     */
+    protected boolean hasSourceMimeType(ConverterDescriptor desc, String mimeType) {
+        if (!Framework.getService(ConfigurationService.class).isBooleanPropertyTrue(ENFORCE_SOURCE_MIME_TYPE_CHECK)) {
+            return true;
+        }
+
+        List<String> sourceMimeTypes = desc.getSourceMimeTypes();
+        if (sourceMimeTypes.contains(ANY_MIME_TYPE)) {
+            return true;
+        }
+
+        if (mimeType == null) {
+            return false;
+        }
+
+        return sourceMimeTypes.stream().anyMatch((sourceMimeType -> isSameMimeType(sourceMimeType, mimeType)));
+    }
+
+    /**
+     * @since 10.3
+     */
+    protected boolean isSameMimeType(String mimeType, String otherMimeType) {
+        try {
+            MimeType mt = new MimeType(mimeType);
+            MimeType omt = new MimeType(otherMimeType);
+
+            // check if both mime types are equals, ignoring the parameters
+            if (mt.getBaseType().equals(omt.getBaseType())) {
+                return true;
+            }
+
+            // check only the primary type if one of the sub type is equals to "*"
+            if (mt.getSubType().equals(ANY_MIME_TYPE) || omt.getSubType().equals(ANY_MIME_TYPE)) {
+                return mt.getPrimaryType().equals(omt.getPrimaryType());
+            }
+        } catch (MimeTypeParseException e) {
+            // do nothing
+        }
+
+        return false;
     }
 
     protected void updateResultBlobMimeType(BlobHolder resultBh, ConverterDescriptor desc) {

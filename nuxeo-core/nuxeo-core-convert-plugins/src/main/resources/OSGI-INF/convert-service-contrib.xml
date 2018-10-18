@@ -36,7 +36,7 @@
 
     <converter name="xlx2text" class="org.nuxeo.ecm.core.convert.plugins.text.extractors.XLX2TextConverter">
       <sourceMimeType>
-      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
       </sourceMimeType>
       <destinationMimeType>text/plain</destinationMimeType>
       <parameters>
@@ -57,9 +57,7 @@
     </converter>
 
     <converter name="docx2text" class="org.nuxeo.ecm.core.convert.plugins.text.extractors.DOCX2TextConverter">
-      <sourceMimeType>
-        application/vnd.openxmlformats-officedocument.wordprocessingml.document
-      </sourceMimeType>
+      <sourceMimeType>application/vnd.openxmlformats-officedocument.wordprocessingml.document</sourceMimeType>
       <destinationMimeType>text/plain</destinationMimeType>
     </converter>
 
