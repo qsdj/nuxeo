@@ -22,6 +22,7 @@ package org.nuxeo.runtime.services.config;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Service holding runtime configuration properties.
@@ -54,7 +55,7 @@ public interface ConfigurationService {
      * @return a map of properties with trimmed keys (namespace removed)
      * @since 10.3
      */
-    Map<String, Serializable> getProperties(String namespace);
+    Properties getProperties(String namespace);
 
     /**
      * Returns true if given property is true when compared to a boolean value.

@@ -26,8 +26,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.Serializable;
-
 import javax.inject.Inject;
 
 import org.junit.Test;
@@ -147,11 +145,11 @@ public class TestConfigurationService {
         assertEquals(2, cs.getProperties("nuxeo.namespace.anothertest").size());
         assertEquals(7, cs.getProperties("nuxeo.namespace").size());
         assertEquals(2, cs.getProperties("nuxeo.namespace.yetanothertest").size());
-        Serializable pouet = cs.getProperties("nuxeo.namespace.yetanothertest").get("pouet");
+        Object pouet = cs.getProperties("nuxeo.namespace.yetanothertest").get("pouet");
         assertTrue(pouet instanceof String);
         assertEquals("bar", pouet);
         assertTrue(cs.getProperties("nuxeo.namespace.test.dummyStringProperty").isEmpty());
-        Serializable truc = cs.getProperties("nuxeo.namespace.yetanothertest").get("truc");
+        Object truc = cs.getProperties("nuxeo.namespace.yetanothertest").get("truc");
         assertTrue(truc instanceof String[]);
         String[] trucArray = (String[]) truc;
         assertEquals(2, trucArray.length);
@@ -174,20 +172,19 @@ public class TestConfigurationService {
     @Test
     @Deploy("org.nuxeo.runtime.test.tests:configuration-namespace-contrib.xml")
     public void testToJson() throws Exception {
-        String expected = "{" + "\"namespace.anothertest.dummyBooleanProperty\": \"true\"," + //
-                "\"namespace.anothertest.pouet\": \"toto\", " + //
-                "\"namespace.test.anotherDummyBooleanProperty\": \"false\", " + //
-                "\"namespace.test.dummyBooleanProperty\": \"true\", " + //
-                "\"namespace.test.dummyStringProperty\": [" + //
-                "\"dummyValue\", " + //
-                "\"anotherDummyValue\"" + //
-                "], " + //
-                "\"namespace.yetanothertest.pouet\": \"bar\", " + //
-                "\"namespace.yetanothertest.truc\": [" + //
-                "\"foo\", " + //
-                "\"bar\"" + //
-                "]" + //
-                "}";
+        String expected =
+                "{\"namespace\":{" +
+                    "\"test\":{" +
+                        "\"anotherDummyBooleanProperty\":\"false\"," +
+                        "\"dummyBooleanProperty\":\"true\"," +
+                        "\"dummyStringProperty\":[\"dummyValue\"," +
+                        "\"anotherDummyValue\"]}," +
+                    "\"anothertest\":{" +
+                        "\"dummyBooleanProperty\":\"true\"," +
+                        "\"pouet\":\"toto\"}," +
+                    "\"yetanothertest\":{" +
+                        "\"pouet\":\"bar\"," +
+                        "\"truc\":[\"foo\",\"bar\"]}}}}";
         String json = cs.getPropertiesAsJson("nuxeo");
         JSONAssert.assertEquals(expected, json, false);
     }

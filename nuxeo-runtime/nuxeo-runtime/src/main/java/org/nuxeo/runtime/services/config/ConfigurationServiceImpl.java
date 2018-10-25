@@ -21,11 +21,13 @@
 package org.nuxeo.runtime.services.config;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.dataformat.javaprop.JavaPropsMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -45,7 +47,8 @@ public class ConfigurationServiceImpl extends DefaultComponent implements Config
 
     public static final String CONFIGURATION_EP = "configuration";
 
-    protected static final ObjectMapper MAPPER = new ObjectMapper();
+    protected static final JavaPropsMapper PROPERTIES_MAPPER = new JavaPropsMapper();
+    protected static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * XXX remove once we are able to get such a cached map from DefaultComponent
@@ -131,24 +134,39 @@ public class ConfigurationServiceImpl extends DefaultComponent implements Config
     }
 
     @Override
-    public Map<String, Serializable> getProperties(String namespace) {
+    public Properties getProperties(String namespace) {
         if (StringUtils.isEmpty(namespace)) {
             return null;
         }
         if (namespace.charAt(namespace.length() - 1) == '.') {
             throw new IllegalArgumentException("namespace cannot end with a dot");
         }
-        return getDescriptors().values()
-                               .stream()
-                               .filter(desc -> startsWithNamespace(desc.getName(), namespace))
-                               .collect(Collectors.toMap(desc -> desc.getId().substring(namespace.length() + 1),
-                                       desc -> desc.getValue() != null && desc.list
-                                               ? desc.getValue().split(LIST_SEPARATOR) : desc.getValue()));
+        Properties properties = new Properties();
+        getDescriptors().values()
+                .stream()
+                .filter(desc -> startsWithNamespace(desc.getName(), namespace))
+                .forEach(desc -> properties.put(
+                        desc.getId().substring(namespace.length() + 1),
+                        desc.list ? desc.getValue().split(LIST_SEPARATOR) : desc.getValue()));
+        return properties;
     }
 
     @Override
     public String getPropertiesAsJson(String namespace) throws IOException {
-        return MAPPER.writeValueAsString(getProperties(namespace));
+        Properties properties = new Properties();
+        // Build properties with indexes for lists
+        getProperties(namespace).forEach((key, value) -> {
+            if (value instanceof String[]) {
+                int idx = 1;
+                for (String v : (String[]) value) {
+                    properties.put(String.format("%s.%d", key, idx++), v);
+                }
+            } else {
+                properties.put(key, value);
+            }
+        });
+        return OBJECT_MAPPER.writer().writeValueAsString(
+                PROPERTIES_MAPPER.readPropertiesAs(properties, ObjectNode.class));
     }
 
     /**
