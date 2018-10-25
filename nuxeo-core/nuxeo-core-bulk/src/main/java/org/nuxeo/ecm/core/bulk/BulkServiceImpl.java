@@ -32,6 +32,8 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
+import org.nuxeo.ecm.core.api.local.ClientLoginModule;
 import org.nuxeo.ecm.core.api.repository.RepositoryManager;
 import org.nuxeo.ecm.core.bulk.message.BulkCommand;
 import org.nuxeo.ecm.core.bulk.message.BulkStatus;
@@ -131,7 +133,8 @@ public class BulkServiceImpl implements BulkService {
             }
             return BulkStatus.unknownOf(commandId);
         }
-        return BulkCodecs.getStatusCodec().decode(statusAsBytes);
+        BulkStatus status = BulkCodecs.getStatusCodec().decode(statusAsBytes);
+        return checkUser(status.getUsername()) ? status : BulkStatus.unknownOf(commandId);
     }
 
     /**
@@ -141,17 +144,17 @@ public class BulkServiceImpl implements BulkService {
         KeyValueStore kvStore = getKvStore();
         byte[] statusAsBytes = BulkCodecs.getStatusCodec().encode(status);
         switch (status.getState()) {
-        case ABORTED:
-            kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes, ABORTED_TTL_SECONDS);
-            // we remove the command from the kv store, so computation have to handle the abortion
-            kvStore.put(status.getCommandId() + COMMAND_SUFFIX, (String) null);
-            break;
-        case COMPLETED:
-            kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes, COMPLETED_TTL_SECONDS);
-            kvStore.setTTL(status.getCommandId() + COMMAND_SUFFIX, COMPLETED_TTL_SECONDS);
-            break;
-        default:
-            kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes);
+            case ABORTED:
+                kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes, ABORTED_TTL_SECONDS);
+                // we remove the command from the kv store, so computation have to handle the abortion
+                kvStore.put(status.getCommandId() + COMMAND_SUFFIX, (String) null);
+                break;
+            case COMPLETED:
+                kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes, COMPLETED_TTL_SECONDS);
+                kvStore.setTTL(status.getCommandId() + COMMAND_SUFFIX, COMPLETED_TTL_SECONDS);
+                break;
+            default:
+                kvStore.put(status.getCommandId() + STATUS_SUFFIX, statusAsBytes);
         }
         return statusAsBytes;
     }
@@ -163,7 +166,8 @@ public class BulkServiceImpl implements BulkService {
         if (statusAsBytes == null) {
             return null;
         }
-        return BulkCodecs.getCommandCodec().decode(statusAsBytes);
+        BulkCommand command = BulkCodecs.getCommandCodec().decode(statusAsBytes);
+        return checkUser(command.getUsername()) ? command : null;
     }
 
     @Override
@@ -173,7 +177,9 @@ public class BulkServiceImpl implements BulkService {
             log.debug("Cannot abort a completed command: " + commandId);
             return status;
         }
-        // TODO: Check that the current user is either admin either the command username
+        if (!checkUser(status.getUsername())) {
+            return BulkStatus.unknownOf(commandId);
+        }
         status.setState(ABORTED);
         // set the status in the KV store
         setStatus(status);
@@ -188,10 +194,15 @@ public class BulkServiceImpl implements BulkService {
         return status;
     }
 
+    protected boolean checkUser(String userName) {
+        NuxeoPrincipal principal = ClientLoginModule.getCurrentPrincipal();
+        return principal != null && (principal.isAdministrator() || principal.getName().equals(userName));
+    }
+
     /**
      * Stores the command in the kv store, returns the encoded command.
      */
-    public byte[] setCommand(BulkCommand command) {
+    protected byte[] setCommand(BulkCommand command) {
         KeyValueStore kvStore = getKvStore();
         byte[] commandAsBytes = BulkCodecs.getCommandCodec().encode(command);
         kvStore.put(command.getId() + COMMAND_SUFFIX, commandAsBytes);
@@ -205,14 +216,14 @@ public class BulkServiceImpl implements BulkService {
         do {
             status = getStatus(commandId);
             switch (status.getState()) {
-            case COMPLETED:
-            case ABORTED:
-                return true;
-            case UNKNOWN:
-                log.error("Unknown status for command: " + commandId);
-                return false;
-            default:
-                // continue
+                case COMPLETED:
+                case ABORTED:
+                    return true;
+                case UNKNOWN:
+                    log.error("Unknown status for command: " + commandId);
+                    return false;
+                default:
+                    // continue
             }
             Thread.sleep(100);
         } while (deadline > System.currentTimeMillis());
@@ -222,7 +233,7 @@ public class BulkServiceImpl implements BulkService {
         return false;
     }
 
-    public KeyValueStore getKvStore() {
+    protected KeyValueStore getKvStore() {
         return Framework.getService(KeyValueService.class).getKeyValueStore(BULK_KV_STORE_NAME);
     }
 

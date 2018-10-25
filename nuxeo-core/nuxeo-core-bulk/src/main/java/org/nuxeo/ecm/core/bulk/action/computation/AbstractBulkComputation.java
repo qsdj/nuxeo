@@ -85,24 +85,31 @@ public abstract class AbstractBulkComputation extends AbstractComputation {
     @Override
     public void processRecord(ComputationContext context, String inputStreamName, Record record) {
         BulkBucket bucket = BulkCodecs.getBucketCodec().decode(record.getData());
-        command = getCommand(bucket.getCommandId());
-        if (command != null) {
-            startBucket(record.getKey());
-            for (List<String> batch : Lists.partition(bucket.getIds(), command.getBatchSize())) {
-                processBatchOfDocuments(batch);
-            }
-            endBucket(context, bucket.getIds().size());
-            context.askForCheckpoint();
-        } else {
-            if (isAbortedCommand(bucket.getCommandId())) {
-                log.debug("Skipping aborted command: {}", bucket.getCommandId());
+        LoginContext loginContext = null;
+        try {
+            loginContext = Framework.loginAsUser("Administrator");
+            command = getCommand(bucket.getCommandId());
+            if (command != null) {
+                startBucket(record.getKey());
+                for (List<String> batch : Lists.partition(bucket.getIds(), command.getBatchSize())) {
+                    processBatchOfDocuments(batch);
+                }
+                endBucket(context, bucket.getIds().size());
                 context.askForCheckpoint();
             } else {
-                // this requires a manual intervention, the kv store might have been lost
-                log.error("Stopping processing, unknown command: {}, offset: {}, record: {}.",
-                        bucket.getCommandId(), context.getLastOffset(), record);
-                context.askForTermination();
+                if (isAbortedCommand(bucket.getCommandId())) {
+                    log.debug("Skipping aborted command: {}", bucket.getCommandId());
+                    context.askForCheckpoint();
+                } else {
+                    // this requires a manual intervention, the kv store might have been lost
+                    log.error("Stopping processing, unknown command: {}, offset: {}, record: {}.",
+                            bucket.getCommandId(), context.getLastOffset(), record);
+                    context.askForTermination();
+                }
             }
+            loginContext.logout();
+        } catch (LoginException e) {
+            e.printStackTrace();
         }
     }
 

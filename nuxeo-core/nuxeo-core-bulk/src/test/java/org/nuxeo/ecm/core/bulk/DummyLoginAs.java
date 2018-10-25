@@ -37,7 +37,7 @@ public class DummyLoginAs implements LoginAs {
 
     @Override
     public LoginContext loginAs(String username) throws LoginException {
-        Principal principal = new UserPrincipal(username, null, false, false);
+        Principal principal = new UserPrincipal(username, null, false, "Administrator".equals(username));
         ClientLoginModule.getThreadLocalLogin().push(principal, null, null);
         return new LoginContext("nuxeo-client-login") {
             @Override

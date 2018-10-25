@@ -22,6 +22,9 @@ import static org.nuxeo.ecm.core.bulk.message.BulkStatus.State.ABORTED;
 import static org.nuxeo.ecm.core.bulk.message.BulkStatus.State.COMPLETED;
 import static org.nuxeo.ecm.core.bulk.message.BulkStatus.State.UNKNOWN;
 
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.bulk.BulkCodecs;
@@ -65,15 +68,25 @@ public class BulkStatusComputation extends AbstractComputation {
         if (!recordStatus.isDelta()) {
             status = recordStatus;
         } else {
-            status = bulkService.getStatus(recordStatus.getCommandId());
-            if (UNKNOWN.equals(status.getState())) {
-                // this requires a manual intervention, the kv store might have been lost
-                log.error(String.format("Stopping processing, unknown status for command: %s, offset: %s, record: %s.",
-                        recordStatus.getCommandId(), context.getLastOffset(), record));
+            LoginContext loginContext = null;
+            try {
+                loginContext = Framework.loginAsUser("Administrator");
+                status = bulkService.getStatus(recordStatus.getCommandId());
+                if (status == null || UNKNOWN.equals(status.getState())) {
+                    // this requires a manual intervention, the kv store might have been lost
+                    log.error(String.format(
+                            "Stopping processing, unknown status for command: %s, offset: %s, record: %s.",
+                            recordStatus.getCommandId(), context.getLastOffset(), record));
+                    context.askForTermination();
+                    return;
+                }
+                status.merge(recordStatus);
+                loginContext.logout();
+            } catch (LoginException e) {
+                log.error("Error while login for status retrieval", e);
                 context.askForTermination();
                 return;
             }
-            status.merge(recordStatus);
         }
         byte[] statusAsBytes = bulkService.setStatus(status);
         if (status.getState() == COMPLETED || recordStatus.getState() == ABORTED) {

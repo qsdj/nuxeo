@@ -18,6 +18,8 @@
  */
 package org.nuxeo.ecm.core.bulk;
 
+import javax.security.auth.login.LoginContext;
+
 import org.nuxeo.ecm.core.io.CoreIOFeature;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.stream.RuntimeStreamFeature;
@@ -39,10 +41,23 @@ import org.nuxeo.runtime.test.runner.TransactionalFeature;
 @Features({ RuntimeFeature.class, TransactionalFeature.class, RuntimeStreamFeature.class, CoreIOFeature.class })
 public class CoreBulkFeature implements RunnerFeature {
 
+    protected LoginContext context;
+
     @Override
     public void initialize(FeaturesRunner runner) {
         runner.getFeature(TransactionalFeature.class)
               .addWaiter(duration -> Framework.getService(BulkService.class).await(duration));
     }
 
+    @Override
+    public void beforeRun(FeaturesRunner runner) throws Exception {
+        context = Framework.loginAsUser("Administrator");
+    }
+
+    @Override
+    public void afterRun(FeaturesRunner runner) throws Exception {
+        if (context != null) {
+            context.logout();
+        }
+    }
 }

@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import javax.inject.Inject;
+import javax.security.auth.login.LoginContext;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,6 +46,7 @@ import org.nuxeo.ecm.core.bulk.message.BulkStatus;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.ecm.core.test.DocumentSetRepositoryInit;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
+import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
@@ -76,6 +78,8 @@ public class TestSetPropertiesAction {
     }
 
     protected void testSetProperties(String username) throws Exception {
+
+        LoginContext context = Framework.loginAsUser(username);
 
         DocumentModel model = session.getDocument(new PathRef("/default-domain/workspaces/test"));
         String nxql = String.format("SELECT * from ComplexDoc where ecm:parentId='%s'", model.getId());
@@ -121,6 +125,8 @@ public class TestSetPropertiesAction {
             assertEquals(foo, child.getPropertyValue("cpx:complex/foo"));
             assertEquals(bar, child.getPropertyValue("cpx:complex/bar"));
         }
+
+        context.logout();
     }
 
     /**
