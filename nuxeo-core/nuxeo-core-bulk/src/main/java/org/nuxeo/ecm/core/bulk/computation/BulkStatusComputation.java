@@ -25,8 +25,8 @@ import static org.nuxeo.ecm.core.bulk.message.BulkStatus.State.UNKNOWN;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.bulk.BulkCodecs;
 import org.nuxeo.ecm.core.bulk.BulkService;
 import org.nuxeo.ecm.core.bulk.BulkServiceImpl;
@@ -53,7 +53,8 @@ import org.nuxeo.runtime.api.Framework;
  * @since 10.2
  */
 public class BulkStatusComputation extends AbstractComputation {
-    private static final Log log = LogFactory.getLog(BulkStatusComputation.class);
+
+    private static final Logger log = LogManager.getLogger(BulkStatusComputation.class);
 
     public BulkStatusComputation(String name) {
         super(name, 1, 1);
@@ -74,9 +75,8 @@ public class BulkStatusComputation extends AbstractComputation {
                 status = bulkService.getStatus(recordStatus.getCommandId());
                 if (status == null || UNKNOWN.equals(status.getState())) {
                     // this requires a manual intervention, the kv store might have been lost
-                    log.error(String.format(
-                            "Stopping processing, unknown status for command: %s, offset: %s, record: %s.",
-                            recordStatus.getCommandId(), context.getLastOffset(), record));
+                    log.error("Stopping processing, unknown status for command: {}, offset: {}, record: {}.",
+                            recordStatus.getCommandId(), context.getLastOffset(), record);
                     context.askForTermination();
                     return;
                 }
