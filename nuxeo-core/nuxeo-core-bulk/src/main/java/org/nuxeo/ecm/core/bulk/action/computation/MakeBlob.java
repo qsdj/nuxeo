@@ -18,18 +18,25 @@
  */
 package org.nuxeo.ecm.core.bulk.action.computation;
 
+import static org.nuxeo.ecm.core.bulk.action.computation.SortBlob.SORT_PARAMETER;
+import static org.nuxeo.ecm.core.bulk.action.computation.ZipBlob.ZIP_PARAMETER;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.nuxeo.ecm.core.api.impl.blob.FileBlob;
 import org.nuxeo.ecm.core.bulk.BulkCodecs;
 import org.nuxeo.ecm.core.bulk.BulkService;
+import org.nuxeo.ecm.core.bulk.message.BulkCommand;
 import org.nuxeo.ecm.core.bulk.message.DataBucket;
 import org.nuxeo.lib.stream.codec.Codec;
 import org.nuxeo.lib.stream.computation.ComputationContext;
@@ -52,12 +59,16 @@ public class MakeBlob extends AbstractTransientBlobComputation {
 
     protected final boolean produceImmediate;
 
+    protected boolean sort = true;
+
+    protected boolean zip;
+
     public MakeBlob() {
         this(false);
     }
 
     public MakeBlob(boolean produceImmediate) {
-        super(NAME);
+        super(NAME, 1, 3);
         this.produceImmediate = produceImmediate;
     }
 
@@ -68,8 +79,7 @@ public class MakeBlob extends AbstractTransientBlobComputation {
         String commandId = in.getCommandId();
         long nbDocuments = in.getCount();
 
-        appendToFile(commandId, in.getData());
-        // TODO append header and footer when the sort parameter is available and equals false
+        Path blobPath = appendToFile(commandId, in.getData());
 
         if (counters.containsKey(commandId)) {
             counters.put(commandId, nbDocuments + counters.get(commandId));
@@ -79,16 +89,49 @@ public class MakeBlob extends AbstractTransientBlobComputation {
         if (counters.get(commandId) < getTotal(commandId)) {
             return;
         }
+
+        String outputStream = OUTPUT_3;
+        BulkCommand command = Framework.getService(BulkService.class).getCommand(commandId);
+        if (command != null) {
+            if (command.getParam(SORT_PARAMETER) != null) {
+                sort = command.getParam(SORT_PARAMETER);
+            }
+            if (command.getParam(ZIP_PARAMETER) != null) {
+                zip = command.getParam(ZIP_PARAMETER);
+            }
+        }
+        if (sort) {
+            outputStream = OUTPUT_1;
+        } else {
+            if (zip) {
+                outputStream = OUTPUT_2;
+            }
+            // Append header and footer
+            try {
+                Path tmpPath = Files.move(blobPath, createTemp("tmp" + commandId), StandardCopyOption.REPLACE_EXISTING);
+                try (InputStream is = Files.newInputStream(tmpPath);
+                        FileOutputStream os = new FileOutputStream(blobPath.toFile(), true)) {
+                    os.write(in.getHeader());
+                    IOUtils.copy(is, os);
+                    os.write(in.getFooter());
+                    os.flush();
+                    Files.delete(tmpPath);
+                }
+            } catch (IOException e) {
+                log.error("Unable to append header and footer", e);
+            }
+        }
+
         // all docs for the command are processed
         String storeName = Framework.getService(BulkService.class).getStatus(commandId).getAction();
         String value = saveInTransientStore(commandId, storeName);
         DataBucket out = new DataBucket(commandId, totals.get(commandId), value, in.getHeaderAsString(),
                 in.getFooterAsString());
         if (produceImmediate) {
-            ((ComputationContextImpl) context).produceRecordImmediate(OUTPUT_1,
+            ((ComputationContextImpl) context).produceRecordImmediate(outputStream,
                     Record.of(commandId, codec.encode(out)));
         } else {
-            context.produceRecord(OUTPUT_1, Record.of(commandId, codec.encode(out)));
+            context.produceRecord(outputStream, Record.of(commandId, codec.encode(out)));
         }
         totals.remove(commandId);
         counters.remove(commandId);
@@ -109,7 +152,7 @@ public class MakeBlob extends AbstractTransientBlobComputation {
         return totals.get(commandId);
     }
 
-    protected void appendToFile(String commandId, byte[] content) {
+    protected Path appendToFile(String commandId, byte[] content) {
         Path path = createTemp(commandId);
         try (FileOutputStream stream = new FileOutputStream(path.toFile(), true)) {
             stream.write(content);
@@ -117,6 +160,7 @@ public class MakeBlob extends AbstractTransientBlobComputation {
         } catch (IOException e) {
             log.error("Unable to write content", e);
         }
+        return path;
     }
 
     protected String saveInTransientStore(String commandId, String storeName) {

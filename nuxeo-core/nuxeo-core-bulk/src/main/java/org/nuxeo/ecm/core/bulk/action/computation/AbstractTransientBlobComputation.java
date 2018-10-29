@@ -56,6 +56,11 @@ public abstract class AbstractTransientBlobComputation extends AbstractComputati
         super(name, 1, 1);
     }
 
+    public AbstractTransientBlobComputation(String name, int nbInputStreams, int nbOutputStreams) {
+        super(name, nbInputStreams, nbOutputStreams);
+    }
+
+
     protected String getTransientStoreKey(String commandId) {
         return metadata.name() + commandId;
     }
