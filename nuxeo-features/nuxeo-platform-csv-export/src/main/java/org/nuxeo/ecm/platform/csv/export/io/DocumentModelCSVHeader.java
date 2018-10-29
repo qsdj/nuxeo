@@ -17,7 +17,7 @@
  *     Funsho David
  */
 
-package org.nuxeo.ecm.core.io.marshallers.csv;
+package org.nuxeo.ecm.platform.csv.export.io;
 
 import static org.nuxeo.ecm.core.io.marshallers.csv.CSVMarshallerConstants.CHANGE_TOKEN_FIELD;
 import static org.nuxeo.ecm.core.io.marshallers.csv.CSVMarshallerConstants.IS_CHECKED_OUT_FIELD;
@@ -52,6 +52,8 @@ import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.schema.SchemaManager;
 import org.nuxeo.ecm.core.schema.types.Field;
 import org.nuxeo.ecm.core.schema.types.Schema;
+import org.nuxeo.ecm.core.schema.types.resolver.ObjectResolver;
+import org.nuxeo.ecm.directory.DirectoryEntryResolver;
 import org.nuxeo.runtime.api.Framework;
 
 /**
@@ -65,6 +67,8 @@ public class DocumentModelCSVHeader {
             PATH_FIELD, TYPE_FIELD, STATE_FIELD, PARENT_REF_FIELD, IS_CHECKED_OUT_FIELD, IS_VERSION_FIELD,
             IS_PROXY_FIELD, PROXY_TARGET_ID_FIELD, VERSIONABLE_ID_FIELD, CHANGE_TOKEN_FIELD, IS_TRASHED_FIELD,
             TITLE_FIELD, VERSION_LABEL_FIELD, LOCK_OWNER_FIELD, LOCK_CREATED_FIELD, LAST_MODIFIED_FIELD };
+
+    public static final List<String> VOCABULARY_TYPES = Arrays.asList("vocabulary", "xvocabulary");
 
     /**
      * Prints the fields for document model system properties.
@@ -95,6 +99,13 @@ public class DocumentModelCSVHeader {
                 for (Field f : fields) {
                     String prefixedName = prefix + f.getName().getLocalName();
                     printer.print(prefixedName);
+                    ObjectResolver resolver = f.getType().getObjectResolver();
+                    if (resolver instanceof DirectoryEntryResolver) {
+                        DirectoryEntryResolver directoryEntryResolver = (DirectoryEntryResolver) resolver;
+                        if (VOCABULARY_TYPES.contains(directoryEntryResolver.getDirectory().getSchema())) {
+                            printer.print(prefixedName + "[label]");
+                        }
+                    }
                 }
             }
         }
@@ -102,6 +113,13 @@ public class DocumentModelCSVHeader {
             Collections.sort(xpaths);
             for (String xpath : xpaths) {
                 printer.print(xpath);
+                ObjectResolver resolver = schemaManager.getField(xpath).getType().getObjectResolver();
+                if (resolver instanceof DirectoryEntryResolver) {
+                    DirectoryEntryResolver directoryEntryResolver = (DirectoryEntryResolver) resolver;
+                    if (VOCABULARY_TYPES.contains(directoryEntryResolver.getDirectory().getSchema())) {
+                        printer.print(xpath + "[label]");
+                    }
+                }
             }
         }
     }
