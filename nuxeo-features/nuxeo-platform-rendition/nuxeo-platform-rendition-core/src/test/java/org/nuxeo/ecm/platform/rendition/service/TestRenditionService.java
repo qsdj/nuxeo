@@ -395,11 +395,13 @@ public class TestRenditionService {
     }
 
     @Test
+    @Deploy("org.nuxeo.ecm.platform.rendition.core:rendition-login-config.xml")
     public void doZipTreeExportRendition() throws Exception {
         doZipTreeExportRendition(false);
     }
 
     @Test
+    @Deploy("org.nuxeo.ecm.platform.rendition.core:rendition-login-config.xml")
     public void doZipTreeExportLazyRendition() throws Exception {
         doZipTreeExportRendition(true);
     }

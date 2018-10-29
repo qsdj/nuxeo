@@ -31,9 +31,18 @@ public class LoginAsDescriptor implements Descriptor {
     @XNode("@class")
     public Class<? extends LoginAs> klass;
 
+    @XNode("@priority")
+    public int priority;
+
     @Override
     public String getId() {
         return UNIQUE_DESCRIPTOR_ID;
+    }
+
+    @Override
+    public Descriptor merge(Descriptor o) {
+        LoginAsDescriptor other = (LoginAsDescriptor) o;
+        return other.priority >= priority ? other : this;
     }
 
 }

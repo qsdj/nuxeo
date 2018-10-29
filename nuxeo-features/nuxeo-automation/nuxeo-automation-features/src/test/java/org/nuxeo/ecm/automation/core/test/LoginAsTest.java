@@ -77,7 +77,7 @@ public class LoginAsTest {
         DocumentModel userModel = mgr.getBareUserModel();
         String schemaName = mgr.getUserSchemaName();
         userModel.setProperty(schemaName, "username", "Foo");
-        ArrayList<String> groups = new ArrayList<String>();
+        ArrayList<String> groups = new ArrayList<>();
         groups.add("administrators");
         userModel.setProperty("user", "groups", groups);
         userModel = mgr.createUser(userModel);
@@ -86,6 +86,7 @@ public class LoginAsTest {
     // ------ Tests comes here --------
 
     @Test
+    @Deploy("org.nuxeo.ecm.automation.core:automation-login-config.xml")
     public void testLoginAs() throws Exception {
         // change the user inside an operation chain.
 
