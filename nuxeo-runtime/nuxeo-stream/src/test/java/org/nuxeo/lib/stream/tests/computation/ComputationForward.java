@@ -49,6 +49,7 @@ public class ComputationForward extends AbstractComputation {
         // dispatch record to output stream
         String outputStream = ostreamList.get(counter++ % ostreamList.size());
         context.produceRecord(outputStream, record);
+
         context.askForCheckpoint();
     }
 
